@@ -6,7 +6,10 @@ create table if not exists profiles (
   id text primary key,
   username text not null,
   display_name text,
-  created_at text not null
+  created_at text not null,
+  whop_email text,
+  whop_status text,
+  whop_verified_at text
 );
 create unique index if not exists profiles_username_lower_uidx on profiles (lower(username));
 
