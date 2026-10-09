@@ -15,6 +15,14 @@ export async function ensureSchema() {
   if (!config.useSupabase) {
     const { getDb } = sqliteDriver;
     getDb().exec(SQLITE_DDL);
+    // Backfill gating columns on demo DBs created before 002_whop_gating.
+    for (const col of ['whop_email text', 'whop_status text', 'whop_verified_at text']) {
+      try {
+        getDb().exec(`alter table profiles add column ${col}`);
+      } catch {
+        /* column already exists */
+      }
+    }
   }
   // Production: schema comes from supabase/migrations/001_verified_init.sql
   // applied by Jason in the Supabase SQL editor. Nothing to do here.
@@ -42,6 +50,25 @@ export async function createProfile({ id, username, display_name }) {
     [id, username.toLowerCase(), display_name || null, created_at]
   );
   return getProfileById(id);
+}
+
+// ---------- whop subscription gating ----------
+// Link the email the seller used at Whop checkout; clears the cache so the
+// next check re-verifies live.
+export async function setWhopEmail(user_id, email) {
+  await query(
+    'update profiles set whop_email = ?, whop_status = null, whop_verified_at = null where id = ?',
+    [email.toLowerCase(), user_id]
+  );
+}
+
+// Cache a live Whop check: status is 'active' | 'inactive'.
+export async function updateWhopCache(user_id, status) {
+  const verified_at = new Date().toISOString();
+  await query(
+    'update profiles set whop_status = ?, whop_verified_at = ? where id = ?',
+    [status, verified_at, user_id]
+  );
 }
 
 // ---------- picks ----------
