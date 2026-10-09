@@ -134,3 +134,28 @@ ${picks.map((p) => pickRow(p, true)).join('') || '<tr><td colspan="4" class="sub
 export function errorPage(user, message) {
   return layout('Error', `<h1>Something went wrong</h1><div class="card"><p>${esc(message)}</p><p><a class="btn ghost" href="/dashboard">Back to dashboard</a></p></div>`, user);
 }
+
+export function paywallPage({ user, profile, error, checkoutUrl }) {
+  const email = profile?.whop_email;
+  const body = `
+<h1>Seller access</h1>
+<p class="sub">${esc(config.appName)} seller tools are <b style="color:#fff">$39/month</b>, sold on Whop. Link the email you used at checkout to activate your account.</p>
+${error ? `<div class="card" style="border-color:#7f1d1d"><span class="flag">${esc(error)}</span></div>` : ''}
+${email
+  ? `<div class="card"><p>No active subscription found for <b style="color:#fff">${esc(email)}</b>.</p>
+     <form method="post" action="/api/whop/recheck"><button class="btn" type="submit">Recheck my subscription</button></form>
+     <p class="sub" style="margin-top:12px">Used a different email at checkout? Update it below.</p></div>`
+  : ''}
+<div class="card">
+<form method="post" action="/subscribe">
+<label>${email ? 'Whop purchase email' : 'Email used for your Whop purchase'}</label>
+<input name="whop_email" type="email" required placeholder="you@email.com" value="${email ? esc(email) : ''}">
+<button class="btn" type="submit">${email ? 'Update & verify' : 'Verify my subscription'}</button>
+</form>
+</div>
+${checkoutUrl
+  ? `<p><a class="btn ghost" href="${esc(checkoutUrl)}">Subscribe on Whop — $39/mo</a></p>`
+  : `<p class="sub">Checkout link coming soon.</p>`}
+<p class="sub">Public profiles, badges, and the landing page stay free for everyone — only the dashboard and pick logging need a subscription.</p>`;
+  return layout('Seller access', body, user);
+}
