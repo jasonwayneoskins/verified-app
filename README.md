@@ -123,9 +123,46 @@ Picks don't grade instantly — a scheduled job checks ESPN for final scores.
 | `PUBLIC_BASE_URL` | Public URL, no trailing slash (badge links) | always |
 | `APP_NAME` | Brand shown on pages/badges (default `Verified`) | optional |
 | `PORT` | default 3000 | optional |
+| `WHOP_API_KEY` | Whop API key (server only — never in client code) | prod only |
+| `WHOP_PRODUCT_ID` | The Verified Whop product id (`prod_...`) | prod only |
+| `WHOP_COMPANY_ID` | Whop company id (`biz_...`) — include if membership lookups fail | optional |
+| `WHOP_CHECKOUT_URL` | Link buyers click to subscribe ($39/mo) | prod only |
+| `WHOP_CACHE_HOURS` | How long a verification is cached (default `6`) | optional |
 
 Leave the four Supabase vars **empty** to run local demo mode (SQLite file at
-`./data/verified-demo.db`).
+`./data/verified-demo.db`). Demo mode bypasses Whop gating entirely.
+
+---
+
+## Whop subscription gating (how access control works)
+
+Only sellers with an **active** $39/mo "Verified" Whop membership can use the
+dashboard and log picks. Everything public — landing page, `/v/<username>`,
+`/badge/<username>.svg`, waitlist — stays open to everyone (that's the marketing).
+
+**Flow:**
+1. Seller signs up / logs in (Supabase Auth) → lands on `/dashboard`.
+2. Without an active subscription they're redirected to `/subscribe` — a clean
+   paywall page: "Verified is $39/month — subscribe on Whop", plus a one-time
+   form asking for **the email they used at Whop checkout**.
+3. The server calls the Whop API (`GET https://api.whop.com/api/v1/memberships`
+   with `Authorization: Bearer <WHOP_API_KEY>`, filtered by `product_ids` and
+   active-ish statuses `active`/`trialing`/`past_due`) and matches
+   `membership.user.email` case-insensitively. The Whop endpoint has no email
+   filter, so the server pages the product's memberships (up to 5 pages of 100).
+4. Result is cached on `profiles` (`whop_status` + `whop_verified_at`) for
+   `WHOP_CACHE_HOURS` (default 6). A **Recheck my subscription** button forces
+   a live check any time.
+5. Webhooks are deliberately skipped for v1 — the 6-hour cache + recheck button
+   covers it without signature-verification complexity.
+
+**Fail closed:** if the Whop API is unreachable or keys aren't configured, the
+seller sees a friendly "couldn't reach Whop — try again" paywall, never a
+crash, and never access. `WHOP_API_KEY` is only ever used server-side.
+
+**Database:** run `supabase/migrations/002_whop_gating.sql` in the Supabase SQL
+editor (adds `whop_email`, `whop_status`, `whop_verified_at` to `profiles`).
+Local demo mode gets the columns automatically at boot.
 
 ---
 
@@ -135,9 +172,11 @@ Leave the four Supabase vars **empty** to run local demo mode (SQLite file at
 |---|---|
 | `/` | Landing page + waitlist capture |
 | `/login`, `/signup`, `/logout` | Auth (Supabase in prod, demo button locally) |
-| `/dashboard` | Seller home: log picks, stats, badge HTML snippet |
-| `/api/games?sport=nfl\|nba` | Upcoming games from ESPN (for the pick form) |
-| `/api/picks` (POST) | Log a pick — rejected if game started |
+| `/dashboard` | Seller home: log picks, stats, badge HTML snippet (subscription-gated) |
+| `/subscribe` | Paywall + Whop purchase-email linking |
+| `/api/whop/recheck` (POST) | Force a live Whop subscription re-check |
+| `/api/games?sport=nfl\|nba` | Upcoming games from ESPN (for the pick form, subscription-gated) |
+| `/api/picks` (POST) | Log a pick — rejected if game started (subscription-gated) |
 | `/v/<username>` | Public verified profile (the product) |
 | `/badge/<username>.svg` | Embeddable badge for Whop listings |
 | `/api/cron/grade?secret=` | Grading job endpoint |
