@@ -8,7 +8,7 @@ export const config = {
   publicBaseUrl: (process.env.PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/$/, ''),
   appName: process.env.APP_NAME || 'Verified',
   // Production mode = Supabase vars present. Otherwise local demo mode (SQLite).
-  useSupabase: bool(process.env.SUPABASE_URL) && !!process.env.DATABASE_URL,
+  useSupabase: !!(process.env.SUPABASE_URL) && !!process.env.DATABASE_URL,
   supabaseUrl: process.env.SUPABASE_URL || '',
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
   supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
