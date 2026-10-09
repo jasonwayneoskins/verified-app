@@ -2,15 +2,16 @@
 import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { config } from './config.js';
-import { ensureSchema, query, getProfileByUsername, insertPick, listPicks, getLastHashSafe, countGraded, addToWaitlist } from './db/index.js';
+import { ensureSchema, query, getProfileById, getProfileByUsername, insertPick, listPicks, getLastHashSafe, countGraded, addToWaitlist } from './db/index.js';
 import { attachUser, requireAuth, setSession, clearSession, supabaseSignUp, supabaseSignIn } from './auth.js';
+import { requireSubscription, linkWhopEmail, recheckSubscription, getSubscriptionState } from './whop.js';
 import { getUpcomingGames } from './espn.js';
 import { chainHash, verifyChain, GENESIS_HASH } from './hashchain.js';
 import { computeStats } from './stats.js';
 import { badgeSvg } from './badge.js';
 import { runGrader } from './grader.js';
 import { landingPage, loginPage, signupPage } from './views.js';
-import { dashboardPage, publicProfilePage, errorPage } from './views2.js';
+import { dashboardPage, publicProfilePage, errorPage, paywallPage } from './views2.js';
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -94,8 +95,36 @@ app.post('/api/auth/signin', async (req, res) => {
   }
 });
 
+// ---------------- whop subscription linking ----------------
+// Sellers link the email they used at Whop checkout; the server verifies it
+// against the Whop API and caches the result. Public pages stay open.
+app.get('/subscribe', requireAuth, async (req, res) => {
+  const profile = await getProfileById(req.user.id);
+  const state = await getSubscriptionState(profile);
+  if (state.active) return res.redirect('/dashboard');
+  res.send(paywallPage({ user: req.user, profile, error: req.query.error, checkoutUrl: config.whopCheckoutUrl }));
+});
+
+app.post('/subscribe', requireAuth, async (req, res) => {
+  try {
+    await linkWhopEmail(req.user.id, req.body.whop_email);
+    res.redirect('/dashboard');
+  } catch (err) {
+    res.redirect('/subscribe?error=' + encodeURIComponent(err.message));
+  }
+});
+
+app.post('/api/whop/recheck', requireAuth, async (req, res) => {
+  try {
+    await recheckSubscription(req.user.id);
+    res.redirect('/dashboard');
+  } catch (err) {
+    res.redirect('/subscribe?error=' + encodeURIComponent(err.message));
+  }
+});
+
 // ---------------- dashboard ----------------
-app.get('/dashboard', requireAuth, async (req, res) => {
+app.get('/dashboard', requireAuth, requireSubscription, async (req, res) => {
   try {
     const picks = await listPicks(req.user.id);
     const stats = computeStats(picks);
@@ -111,7 +140,7 @@ app.get('/dashboard', requireAuth, async (req, res) => {
 });
 
 // ---------------- games api (for the pick form) ----------------
-app.get('/api/games', requireAuth, async (req, res) => {
+app.get('/api/games', requireAuth, requireSubscription, async (req, res) => {
   try {
     const sport = req.query.sport === 'nba' ? 'nba' : 'nfl';
     const games = await getUpcomingGames(sport, 7);
@@ -122,7 +151,7 @@ app.get('/api/games', requireAuth, async (req, res) => {
 });
 
 // ---------------- log a pick (the anti-fraud chokepoint) ----------------
-app.post('/api/picks', requireAuth, async (req, res) => {
+app.post('/api/picks', requireAuth, requireSubscription, async (req, res) => {
   try {
     const sport = req.body.sport === 'nba' ? 'nba' : 'nfl';
     const gameId = String(req.body.game || '').trim();
