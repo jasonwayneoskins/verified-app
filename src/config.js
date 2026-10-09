@@ -8,7 +8,7 @@ export const config = {
   publicBaseUrl: (process.env.PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/$/, ''),
   appName: process.env.APP_NAME || 'Verified',
   // Production mode = Supabase vars present. Otherwise local demo mode (SQLite).
-  useSupabase: !!(process.env.SUPABASE_URL) && !!process.env.DATABASE_URL,
+  useSupabase: !!process.env.SUPABASE_URL && !!process.env.DATABASE_URL,
   supabaseUrl: process.env.SUPABASE_URL || '',
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
   supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
@@ -16,4 +16,10 @@ export const config = {
   sqlitePath: process.env.SQLITE_PATH || './data/verified-demo.db',
   // Trust rules
   minGradedForBadge: 100,
+  // --- Whop subscription gating (server-side only) ---
+  whopApiKey: process.env.WHOP_API_KEY || '',
+  whopProductId: process.env.WHOP_PRODUCT_ID || '',
+  whopCompanyId: process.env.WHOP_COMPANY_ID || '',
+  whopCheckoutUrl: process.env.WHOP_CHECKOUT_URL || '',
+  whopCacheHours: parseFloat(process.env.WHOP_CACHE_HOURS || '6') || 6,
 };
