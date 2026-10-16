@@ -8,12 +8,15 @@ import { createHash } from 'node:crypto';
 export const GENESIS_HASH = '0'.repeat(64);
 
 export function canonicalPayload(pick) {
+  // Normalize dates: pg returns timestamptz as Date objects while hashes were
+  // computed from ISO strings. Without this, every chain breaks on read-back.
+  const iso = (v) => (v instanceof Date ? v : new Date(v)).toISOString();
   return [
     pick.id,
     pick.user_id,
     pick.sport,
     pick.espn_game_id,
-    pick.game_start,
+    iso(pick.game_start),
     pick.home_team,
     pick.away_team,
     pick.market,
@@ -21,7 +24,7 @@ export function canonicalPayload(pick) {
     pick.line ?? '',
     pick.odds,
     pick.units,
-    pick.created_at,
+    iso(pick.created_at),
   ].join('|');
 }
 
